@@ -18,14 +18,15 @@ user's request, and the current widget state, choose the
 optimal chart type and produce a chart_config.
 
 Supported chart types:
-  bar, line, pie, doughnut, area, scatter
+  bar, line, pie, doughnut, area, scatter,
+  radar, polarArea, bubble
 
 Return a JSON object:
 {
-  "chart_type": "bar|line|pie|doughnut|area|scatter",
+  "chart_type": "<one of the supported types>",
   "chart_config": {
     "x_axis": "column_name_for_x_axis",
-    "y_axis": "column_name_for_y_axis",
+    "y_axis": "column_name" OR ["col1", "col2"],
     "colors": ["#4F46E5", "#10B981", "#F59E0B", "#EF4444"],
     "title": {
       "display": true,
@@ -35,24 +36,36 @@ Return a JSON object:
       "display": true,
       "position": "top"
     },
-    "indexAxis": "x"
+    "indexAxis": "x",
+    "stacked": false,
+    "r_axis": null
   },
   "explanation": "Why this chart type and config was chosen"
 }
 
 Guidelines:
-1. Time-series data → line or area chart.
-2. Categorical comparison → bar chart (horizontal if many
-   categories: set indexAxis="y").
-3. Part-of-whole → pie or doughnut.
-4. Two numeric axes → scatter.
-5. x_axis / y_axis must match column aliases returned by the
-   SQL query.
-6. Provide 4-8 pleasant colours (hex) that work well together.
-7. Title text should be concise and descriptive.
-8. If the user asks to change only the chart style, keep
-   x_axis / y_axis from the current config unless the query
-   changed too.
+ 1. Time-series data → line or area chart.
+ 2. Categorical comparison → bar chart (horizontal if many
+    categories: set indexAxis="y").
+ 3. Part-of-whole → pie or doughnut.
+ 4. Two numeric axes → scatter.
+ 5. Multi-dimensional comparison across categories → radar.
+ 6. Proportional values with magnitude → polarArea.
+ 7. Three-variable correlation (x, y, size) → bubble.
+    Set r_axis to the column name for bubble radius.
+ 8. x_axis / y_axis must match column aliases returned by
+    the SQL query.
+ 9. Multiple numeric columns → use y_axis as an array:
+    y_axis: ["revenue", "cost", "profit"]
+    This produces grouped/multi-series charts.
+10. For stacked bar or stacked area, set stacked=true.
+11. Provide 4-8 pleasant colours (hex) that work well together.
+12. Title text should be concise and descriptive.
+13. If the user asks to change only the chart style, keep
+    x_axis / y_axis from the current config unless the query
+    changed too.
+14. radar and polarArea do NOT use indexAxis.
+15. bubble MUST have r_axis set to a numeric column.
 """
 
 

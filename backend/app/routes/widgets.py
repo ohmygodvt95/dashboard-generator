@@ -6,8 +6,11 @@ and AI-powered chat for widget configuration.
 """
 
 import json
+import logging
 import re
 from typing import List, Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -373,10 +376,15 @@ def get_widget_data(
         return data
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
+        logger.exception(
+            "Widget %s query execution failed: %s",
+            widget_id,
+            exc,
+        )
         raise HTTPException(
             status_code=500,
-            detail="Query execution failed",
+            detail=f"Query execution failed: {exc}",
         )
 
 

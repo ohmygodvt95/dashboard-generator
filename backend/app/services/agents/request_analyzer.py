@@ -1,9 +1,12 @@
 """
 Request Analyzer agent.
 
-Classifies the user's intent and decides which downstream
-agents need to be invoked.  Uses a short, deterministic
-prompt so the routing decision is fast and cheap.
+Classifies the user's intent, evaluates a readiness
+checklist for chart-creation requests, and decides which
+downstream agents need to be invoked.
+
+Uses a short, deterministic prompt so the routing decision
+is fast and cheap.
 """
 
 from typing import Dict, Any, List
@@ -19,12 +22,21 @@ decide which specialist agents must run.
 Return a JSON object — nothing else:
 
 {
-  "intent": "<one of the values below>",
+  "intent": "<one of the intent values below>",
   "needs_schema_analysis": <bool>,
   "needs_query": <bool>,
   "needs_filters": <bool>,
   "needs_chart": <bool>,
-  "message": "<short reply ONLY when no agents are needed>",
+  "needs_clarification": <bool>,
+  "checklist": {
+    "has_data_source": <bool>,
+    "has_metric": <bool>,
+    "has_dimension": <bool>,
+    "has_chart_type": <bool>,
+    "has_filters": <bool>,
+    "has_time_range": <bool>
+  },
+  "message": "<reply text — see rules below>",
   "summary": "<1-2 sentence summary of what the user wants>"
 }
 
@@ -37,8 +49,48 @@ Possible intent values:
 - "question"       → user asks a question (no widget change)
 - "greeting"       → casual greeting / small talk
 
-Routing rules:
-• create_chart     → all flags true
+─── READINESS CHECKLIST (only evaluate for create_chart) ───
+
+When the intent is "create_chart", evaluate the checklist:
+
+  has_data_source  — is a database connection available?
+                     (check the "Database connected" flag)
+  has_metric       — did the user specify WHAT to measure?
+                     e.g. "revenue", "order count", "users"
+  has_dimension    — did the user specify HOW to group/slice?
+                     e.g. "by month", "by category", "per region"
+  has_chart_type   — did the user specify or imply a chart type?
+                     (optional — default bar)
+  has_filters      — did the user mention any filters?
+                     (optional — none by default)
+  has_time_range   — did the user specify a time range?
+                     (optional — no constraint by default)
+
+REQUIRED items: has_data_source, has_metric, has_dimension.
+OPTIONAL items: has_chart_type, has_filters, has_time_range.
+
+If ANY required item is false → set needs_clarification=true,
+set ALL agent flags to false, and write a friendly "message"
+that:
+  1. Lists what you already understand (✅).
+  2. Asks specific questions for ONLY the missing REQUIRED
+     items (❓). Keep it concise — ask at most 3 questions.
+  3. Optionally mention optional items they could specify.
+
+IMPORTANT: Look at the full conversation history, not just the
+latest message.  If a prior message already provided the metric
+or dimension, treat it as satisfied even if the current message
+does not repeat it.
+
+If ALL required items are satisfied → set needs_clarification
+=false and apply the normal routing rules below.
+
+For non-create intents, set needs_clarification=false and
+fill checklist with all true values (not relevant).
+
+─── ROUTING RULES ───
+
+• create_chart     → all agent flags true
 • modify_query     → needs_query=true, needs_filters=true,
                      needs_chart=true (columns may change)
 • modify_chart     → needs_chart=true only
@@ -62,6 +114,12 @@ class RequestAnalyzerAgent(BaseAgent):
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analyse a user message and return routing flags.
+
+        When the intent is ``create_chart`` and required
+        checklist items are missing, sets
+        ``needs_clarification=True`` and returns clarifying
+        questions in ``message`` instead of routing to
+        downstream agents.
 
         Parameters:
             context (dict): Must contain ``user_message``,
@@ -112,14 +170,33 @@ class RequestAnalyzerAgent(BaseAgent):
         result = self._call_llm(messages)
 
         # Guarantee all expected keys exist
+        default_checklist = {
+            "has_data_source": True,
+            "has_metric": True,
+            "has_dimension": True,
+            "has_chart_type": True,
+            "has_filters": True,
+            "has_time_range": True,
+        }
+        checklist = result.get("checklist", default_checklist)
+        # Ensure every key exists in the checklist
+        for key in default_checklist:
+            checklist.setdefault(key, default_checklist[key])
+
         return {
             "intent": result.get("intent", "create_chart"),
             "needs_schema_analysis": result.get(
                 "needs_schema_analysis", False
             ),
             "needs_query": result.get("needs_query", False),
-            "needs_filters": result.get("needs_filters", False),
+            "needs_filters": result.get(
+                "needs_filters", False
+            ),
             "needs_chart": result.get("needs_chart", False),
+            "needs_clarification": result.get(
+                "needs_clarification", False
+            ),
+            "checklist": checklist,
             "message": result.get("message", ""),
             "summary": result.get("summary", ""),
         }

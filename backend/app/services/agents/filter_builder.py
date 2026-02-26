@@ -204,7 +204,7 @@ def _validate_filters(
             warning messages.
     """
     # Extract all :param_name placeholders from the raw
-    # template (including inside {%% if %} blocks).
+    # template (including inside {% if %} blocks).
     all_params = set(
         re.findall(r":([a-zA-Z_][a-zA-Z0-9_]*)", query_template)
     )

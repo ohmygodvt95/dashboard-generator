@@ -7,7 +7,20 @@ for all API endpoints.
 
 from typing import Optional, List, Any, Dict
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+# --- Allowed type enums --------------------------------
+
+CHART_TYPES = {
+    "bar", "line", "pie", "doughnut", "area",
+    "scatter", "radar", "polarArea", "bubble",
+}
+
+FILTER_TYPES = {
+    "select", "text", "number", "date",
+    "date_range", "slider",
+}
 
 
 # --- DB Connection Schemas ---
@@ -100,6 +113,19 @@ class WidgetUpdate(BaseModel):
     chart_config: Optional[Dict[str, Any]] = None
     layout_config: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
+
+    @field_validator("chart_type")
+    @classmethod
+    def validate_chart_type(
+        cls, v: Optional[str],
+    ) -> Optional[str]:
+        """Reject unknown chart types."""
+        if v is not None and v not in CHART_TYPES:
+            raise ValueError(
+                f"Unsupported chart_type '{v}'. "
+                f"Allowed: {sorted(CHART_TYPES)}"
+            )
+        return v
 
 
 class FilterResponse(BaseModel):

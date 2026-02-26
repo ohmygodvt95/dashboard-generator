@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+/* ── react-datepicker overrides ────────────────────────── */
+.react-datepicker-wrapper {
+  display: inline-block;
+}
+
+.react-datepicker__close-icon::after {
+  background-color: #6b7280;
+  font-size: 12px;
+  padding: 1px 3px;
+}
+
+.react-datepicker-popper {
+  z-index: 50 !important;
+}

@@ -22,17 +22,29 @@ template.
 CRITICAL — Jinja2 template rules:
 1. Start the WHERE clause with  WHERE 1=1
 2. Wrap each optional filter in Jinja2 conditional blocks:
-   {%% if param_name %%} AND column = :param_name {%% endif %%}
+   {% if param_name %} AND column = :param_name {% endif %}
 3. For date_range filters use TWO conditions:
-   {%% if date_start %%} AND col >= :date_start {%% endif %%}
-   {%% if date_end %%}   AND col <= :date_end   {%% endif %%}
+   {% if date_start %} AND col >= :date_start {% endif %}
+   {% if date_end %}   AND col <= :date_end   {% endif %}
 4. Parameters inside SQL use :param_name (colon prefix).
 5. The query MUST return valid data even when NO filters are
    applied (all conditionals stripped out).
 6. Conditional JOINs are allowed:
-   {%% if some_param %%} JOIN ... {%% endif %%}
+   {% if some_param %} JOIN ... {% endif %}
 7. LIMIT is also allowed:
-   {%% if limit %%} LIMIT :limit {%% endif %%}
+   {% if limit %} LIMIT :limit {% endif %}
+8. NEVER double-escape percent signs in Jinja2 tags.
+   CORRECT: {% if x %}  WRONG: {%% if x %%}
+
+Multi-dataset charts:
+- When the user wants to compare multiple metrics (e.g.
+  revenue vs cost, grouped bar, stacked area, radar), the
+  query MUST return multiple numeric columns.
+- Example: SELECT month, SUM(revenue) as revenue,
+  SUM(cost) as cost, SUM(profit) as profit FROM ...
+  The chart builder will map y_axis to ["revenue","cost","profit"].
+- For bubble charts, include an extra numeric column for
+  the bubble radius (e.g. total_count).
 
 Safety rules:
 - Only SELECT queries — never DROP, DELETE, UPDATE, INSERT.

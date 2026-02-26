@@ -189,8 +189,21 @@ export default function WidgetEditorPage() {
           resolved.name = `${resolved.host}/${resolved.database_name}`;
         }
         const conn = await createConnection(resolved);
-        const res = await testConnection(conn.data.id);
+        const savedConn = conn.data;
+        const res = await testConnection(savedConn.id);
         setTestResult(res.data);
+
+        // Link connection to widget and refresh list so that
+        // a subsequent "Save" does an update instead of
+        // creating a duplicate.
+        await updateWidget(id, { connection_id: savedConn.id });
+        setSelectedConnId(savedConn.id);
+        setWidget((prev) => ({
+          ...prev,
+          connection_id: savedConn.id,
+        }));
+        setShowConnForm(false);
+        await fetchConnections();
       }
     } catch (err) {
       setTestResult({

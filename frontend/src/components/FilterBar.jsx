@@ -1,5 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { getFilterOptions } from '../services/api';
+
+/**
+ * Convert a "YYYY-MM-DD" string to a Date object.
+ * Returns null when the input is empty or invalid.
+ */
+function parseDate(str) {
+  if (!str) return null;
+  const d = new Date(str + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Format a Date object to "YYYY-MM-DD" string.
+ * Returns empty string when the input is null.
+ */
+function formatDate(date) {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export default function FilterBar({
   filters,
@@ -84,31 +108,39 @@ function FilterField({ filter, widgetId, value, onChange }) {
       return (
         <div>
           <label className={labelClass}>{filter.label}</label>
-          <input
-            type="date"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
+          <DatePicker
+            selected={parseDate(value)}
+            onChange={(date) => onChange(formatDate(date))}
+            dateFormat="yyyy-MM-dd"
+            isClearable
+            placeholderText="Select date"
             className={inputClass}
           />
         </div>
       );
 
-    case 'date_range':
+    case 'date_range': {
+      const rangeVal = typeof value === 'object' ? value : {};
+      const startDate = parseDate(rangeVal.start);
+      const endDate = parseDate(rangeVal.end);
       return (
         <div className="flex gap-2 items-end">
           <div>
             <label className={labelClass}>
               {filter.label} (Start)
             </label>
-            <input
-              type="date"
-              value={typeof value === 'object' ? (value?.start || '') : ''}
-              onChange={(e) =>
-                onChange({
-                  ...(typeof value === 'object' ? value : {}),
-                  start: e.target.value,
-                })
+            <DatePicker
+              selected={startDate}
+              onChange={(date) =>
+                onChange({ ...rangeVal, start: formatDate(date) })
               }
+              selectsStart
+              startDate={startDate}
+              endDate={endDate}
+              maxDate={endDate}
+              dateFormat="yyyy-MM-dd"
+              isClearable
+              placeholderText="Start date"
               className={inputClass}
             />
           </div>
@@ -116,20 +148,24 @@ function FilterField({ filter, widgetId, value, onChange }) {
             <label className={labelClass}>
               {filter.label} (End)
             </label>
-            <input
-              type="date"
-              value={typeof value === 'object' ? (value?.end || '') : ''}
-              onChange={(e) =>
-                onChange({
-                  ...(typeof value === 'object' ? value : {}),
-                  end: e.target.value,
-                })
+            <DatePicker
+              selected={endDate}
+              onChange={(date) =>
+                onChange({ ...rangeVal, end: formatDate(date) })
               }
+              selectsEnd
+              startDate={startDate}
+              endDate={endDate}
+              minDate={startDate}
+              dateFormat="yyyy-MM-dd"
+              isClearable
+              placeholderText="End date"
               className={inputClass}
             />
           </div>
         </div>
       );
+    }
 
     case 'number':
       return (

@@ -32,6 +32,25 @@ _jinja_env = SandboxedEnvironment(
 )
 
 
+def _normalize_template(template_str: str) -> str:
+    """
+    Fix double-escaped Jinja2 tags produced by some LLMs.
+
+    Converts ``{%% if x %%}`` → ``{% if x %}`` and similar
+    patterns so the Jinja2 parser can handle them.
+
+    Parameters:
+        template_str (str): Raw SQL template string.
+
+    Returns:
+        str: Template with normalised Jinja2 delimiters.
+    """
+    # {%% ... %%}  →  {% ... %}
+    template_str = re.sub(r"\{%%", "{%", template_str)
+    template_str = re.sub(r"%%}", "%}", template_str)
+    return template_str
+
+
 def render_query(
     template_str: str,
     params: Dict[str, Any],
@@ -40,12 +59,13 @@ def render_query(
     Render a Jinja2 SQL template and return the final SQL
     with only the relevant bound parameters.
 
-    1. Evaluate Jinja2 conditionals using *boolean-only*
+    1. Normalise double-escaped Jinja2 delimiters.
+    2. Evaluate Jinja2 conditionals using *boolean-only*
        context — actual param values are never passed into
        the template so user input cannot be evaluated as
        Jinja2 expressions.
-    2. Extract :param_name placeholders from the rendered SQL.
-    3. Return only the params that actually appear in the
+    3. Extract :param_name placeholders from the rendered SQL.
+    4. Return only the params that actually appear in the
        final SQL.
 
     Parameters:
@@ -55,6 +75,10 @@ def render_query(
     Returns:
         tuple[str, dict]: (rendered_sql, filtered_params)
     """
+    # Normalise templates that contain double-escaped
+    # Jinja2 delimiters (e.g. {%% if x %%} → {% if x %}).
+    template_str = _normalize_template(template_str)
+
     # SECURITY: Only pass booleans into the Jinja2 context so
     # user-supplied strings are never evaluated as expressions.
     context = {k: bool(v) for k, v in params.items()}

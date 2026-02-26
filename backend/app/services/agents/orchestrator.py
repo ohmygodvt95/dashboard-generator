@@ -43,6 +43,7 @@ from app.services.agents.summarizer import (
     estimate_tokens,
 )
 from app.config import settings
+from app.schemas import CHART_TYPES, FILTER_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -204,13 +205,31 @@ def orchestrate_chat(
     })
     logger.info(
         "[orchestrator] intent=%s  query=%s  filter=%s  "
-        "chart=%s  schema=%s",
+        "chart=%s  schema=%s  clarify=%s",
         routing["intent"],
         routing["needs_query"],
         routing["needs_filters"],
         routing["needs_chart"],
         routing["needs_schema_analysis"],
+        routing.get("needs_clarification", False),
     )
+
+    # If the analyzer needs clarification (missing checklist
+    # items), return the questions without invoking builders.
+    if routing.get("needs_clarification"):
+        checklist = routing.get("checklist", {})
+        logger.info(
+            "[orchestrator] checklist incomplete, asking "
+            "user for clarification: %s",
+            checklist,
+        )
+        return {
+            "message": routing.get("message", ""),
+            "widget_update": None,
+            "filters": [],
+            "needs_clarification": True,
+            "checklist": checklist,
+        }
 
     # If no agents needed (greeting / question), return early.
     if not any([
@@ -356,6 +375,25 @@ def orchestrate_chat_stream(
         "step": step,
         "summary": routing.get("summary", ""),
     })
+
+    # If the analyzer needs clarification (missing checklist
+    # items), return the questions without invoking builders.
+    if routing.get("needs_clarification"):
+        checklist = routing.get("checklist", {})
+        logger.info(
+            "[orchestrator] checklist incomplete (stream), "
+            "asking user for clarification: %s",
+            checklist,
+        )
+        result = {
+            "message": routing.get("message", ""),
+            "widget_update": None,
+            "filters": [],
+            "needs_clarification": True,
+            "checklist": checklist,
+        }
+        yield _sse_event("result", result)
+        return result
 
     if not any([
         routing["needs_query"],
@@ -509,6 +547,15 @@ def _merge(
     if chart_result:
         ct = chart_result.get("chart_type", "")
         if ct:
+            # Fall back to "bar" when the AI returns an
+            # unsupported chart type.
+            if ct not in CHART_TYPES:
+                logger.warning(
+                    "[orchestrator] unknown chart_type "
+                    "'%s', falling back to 'bar'",
+                    ct,
+                )
+                ct = "bar"
             widget_update["chart_type"] = ct
         cc = chart_result.get("chart_config")
         if cc:
@@ -519,6 +566,17 @@ def _merge(
 
     if filter_result:
         filters = filter_result.get("filters", [])
+        # Validate filter types — fall back to "text"
+        # when the AI returns an unsupported type.
+        for f in filters:
+            ft = f.get("filter_type", "text")
+            if ft not in FILTER_TYPES:
+                logger.warning(
+                    "[orchestrator] unknown filter_type "
+                    "'%s' for param '%s', using 'text'",
+                    ft, f.get("param_name"),
+                )
+                f["filter_type"] = "text"
         exp = filter_result.get("explanation", "")
         if exp:
             explanations.append(f"🔍 Filters: {exp}")
